@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧩 Puzzle</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1e293b;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        h1 {
+            color: #f1f5f9;
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+
+        .info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            color: #cbd5e1;
+            font-weight: 500;
+        }
+
+        canvas {
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        .victory-message {
+            color: #4ade80;
+            font-weight: bold;
+            font-size: 1.2rem;
+            display: none;
+        }
+
+        @media (max-width: 500px) {
+            .game-container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🧩 Puzzle</h1>
+        <div class="info">
+            <span id="moves">🔄 Coups : 0</span>
+            <span id="timer">⏱️ 0 s</span>
+        </div>
+        <canvas id="puzzleCanvas"></canvas>
+        <div class="victory-message" id="victory">🎉 Félicitations !</div>
+        <div class="buttons">
+            <button id="shuffleBtn">🔀 Mélanger</button>
+            <button id="reloadBtn">🔄 Rejouer</button>
+        </div>
+    </div>
+
+    <script>
+        // URL de ton image (RAW)
+        const imageUrl = 'https://raw.githubusercontent.com/konkomiseidoun-glitch/puzzle-game/37ca4d60f3e133e99b2f386fb4f78aeee6655803/coupes.jpg';
+
+        const canvas = document.getElementById('puzzleCanvas');
+        const ctx = canvas.getContext('2d');
+        const movesSpan = document.getElementById('moves');
+        const timerSpan = document.getElementById('timer');
+        const victoryDiv = document.getElementById('victory');
+
+        const rows = 3;
+        const cols = 3;
+        const tileCount = rows * cols;
+        const emptyIndex = tileCount - 1;
+
+        let image = new Image();
+        image.crossOrigin = 'Anonymous';
+        image.src = imageUrl;
+
+        let tiles = [];
+        let tileWidth, tileHeight;
+        let moves = 0;
+        let timerInterval;
+        let seconds = 0;
+        let gameStarted = false;
+        let gameCompleted = false;
+
+        // === SON ===
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function getAudioCtx() {
+            if (!audioCtx) audioCtx = new AudioCtx();
+            return audioCtx;
+        }
+
+        function playSlideSound() {
+            try {
+                const ctx = getAudioCtx();
+                const t = ctx.currentTime;
+
+                // Son de glissement : un "tic" doux
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, t);
+                osc.frequency.exponentialRampToValueAtTime(300, t + 0.08);
+                gain.gain.setValueAtTime(0.08, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.1);
+            } catch (e) {
+                // Silencieux si le navigateur bloque l'audio
+            }
+        }
+
+        function playVictorySound() {
+            try {
+                const ctx = getAudioCtx();
+                const t = ctx.currentTime;
+                // Trois notes montantes
+                [523, 659, 784].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, t + i * 0.15);
+                    gain.gain.setValueAtTime(0, t + i * 0.15);
+                    gain.gain.linearRampToValueAtTime(0.1, t + i * 0.15 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.15 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t + i * 0.15);
+                    osc.stop(t + i * 0.15 + 0.3);
+                });
+            } catch (e) {
+                // Silencieux si erreur
+            }
+        }
+
+        image.onload = () => {
+            setupCanvas();
+            initTiles();
+            shuffleTiles();
+            startTimer();
+            draw();
+        };
+
+        function setupCanvas() {
+            const maxSize = Math.min(500, window.innerWidth - 40);
+            const aspect = image.width / image.height;
+            if (aspect > 1) {
+                canvas.width = maxSize;
+                canvas.height = maxSize / aspect;
+            } else {
+                canvas.height = maxSize;
+                canvas.width = maxSize * aspect;
+            }
+            tileWidth = canvas.width / cols;
+            tileHeight = canvas.height / rows;
+        }
+
+        function initTiles() {
+            tiles = [];
+            for (let i = 0; i < tileCount; i++) {
+                tiles.push(i);
+            }
+        }
+
+        function shuffleTiles() {
+            let empty = emptyIndex;
+            for (let i = 0; i < 1000; i++) {
+                const possibleMoves = getAdjacentIndices(empty);
+                const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                [tiles[empty], tiles[randomMove]] = [tiles[randomMove], tiles[empty]];
+                empty = randomMove;
+            }
+            moves = 0;
+            seconds = 0;
+            gameCompleted = false;
+            victoryDiv.style.display = 'none';
+            updateMoves();
+            updateTimer();
+            clearInterval(timerInterval);
+            gameStarted = false;
+            startTimer();
+        }
+
+        function getAdjacentIndices(index) {
+            const row = Math.floor(index / cols);
+            const col = index % cols;
+            const adj = [];
+            if (row > 0) adj.push(index - cols);
+            if (row < rows - 1) adj.push(index + cols);
+            if (col > 0) adj.push(index - 1);
+            if (col < cols - 1) adj.push(index + 1);
+            return adj;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < tileCount; i++) {
+                const tileIndex = tiles[i];
+                if (tileIndex === emptyIndex) continue;
+
+                const srcRow = Math.floor(tileIndex / cols);
+                const srcCol = tileIndex % cols;
+                const destRow = Math.floor(i / cols);
+                const destCol = i % cols;
+
+                const sx = srcCol * (image.width / cols);
+                const sy = srcRow * (image.height / rows);
+                const sw = image.width / cols;
+                const sh = image.height / rows;
+
+                const dx = destCol * tileWidth;
+                const dy = destRow * tileHeight;
+
+                ctx.drawImage(image, sx, sy, sw, sh, dx, dy, tileWidth, tileHeight);
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(dx, dy, tileWidth, tileHeight);
+            }
+            const emptyPos = tiles.indexOf(emptyIndex);
+            const emptyRow = Math.floor(emptyPos / cols);
+            const emptyCol = emptyPos % cols;
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(emptyCol * tileWidth, emptyRow * tileHeight, tileWidth, tileHeight);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (gameCompleted) return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            const col = Math.floor(mouseX / tileWidth);
+            const row = Math.floor(mouseY / tileHeight);
+            const clickedIndex = row * cols + col;
+
+            if (clickedIndex < 0 || clickedIndex >= tileCount) return;
+
+            const emptyPos = tiles.indexOf(emptyIndex);
+            const adjacent = getAdjacentIndices(emptyPos);
+
+            if (adjacent.includes(clickedIndex)) {
+                // Mouvement valide
+                [tiles[emptyPos], tiles[clickedIndex]] = [tiles[clickedIndex], tiles[emptyPos]];
+                moves++;
+                updateMoves();
+
+                // 🔊 JOUER LE SON DE GLISSEMENT
+                playSlideSound();
+
+                if (!gameStarted) {
+                    gameStarted = true;
+                    startTimer();
+                }
+                draw();
+                checkVictory();
+            }
+        });
+
+        function updateMoves() {
+            movesSpan.textContent = `🔄 Coups : ${moves}`;
+        }
+
+        function updateTimer() {
+            timerSpan.textContent = `⏱️ ${seconds} s`;
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                seconds++;
+                updateTimer();
+            }, 1000);
+        }
+
+        function checkVictory() {
+            for (let i = 0; i < tileCount; i++) {
+                if (tiles[i] !== i) return;
+            }
+            gameCompleted = true;
+            clearInterval(timerInterval);
+            victoryDiv.style.display = 'block';
+
+            // 🎉 JOUER LE SON DE VICTOIRE
+            playVictorySound();
+        }
+
+        document.getElementById('shuffleBtn').addEventListener('click', () => {
+            if (gameCompleted) {
+                initTiles();
+                gameCompleted = false;
+                victoryDiv.style.display = 'none';
+            }
+            shuffleTiles();
+            draw();
+            if (!gameStarted) {
+                startTimer();
+            }
+        });
+
+        document.getElementById('reloadBtn').addEventListener('click', () => {
+            clearInterval(timerInterval);
+            initTiles();
+            shuffleTiles();
+            moves = 0;
+            seconds = 0;
+            gameCompleted = false;
+            victoryDiv.style.display = 'none';
+            updateMoves();
+            updateTimer();
+            draw();
+            startTimer();
+        });
+    </script>
+</body>
+</html>
