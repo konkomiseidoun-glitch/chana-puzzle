@@ -111,8 +111,8 @@
     </div>
 
     <script>
-        // URL de ton image (RAW)
-        const imageUrl = 'https://raw.githubusercontent.com/konkomiseidoun-glitch/puzzle-game/37ca4d60f3e133e99b2f386fb4f78aeee6655803/coupes.jpg';
+        // ✅ URL de ta nouvelle image
+        const imageUrl = 'https://raw.githubusercontent.com/konkomiseidoun-glitch/chana-puzzle/661a3391d3ac8687171c20870b95011d43724043/image100.jpg';
 
         const canvas = document.getElementById('puzzleCanvas');
         const ctx = canvas.getContext('2d');
@@ -150,8 +150,6 @@
             try {
                 const ctx = getAudioCtx();
                 const t = ctx.currentTime;
-
-                // Son de glissement : un "tic" doux
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.type = 'sine';
@@ -163,16 +161,13 @@
                 gain.connect(ctx.destination);
                 osc.start(t);
                 osc.stop(t + 0.1);
-            } catch (e) {
-                // Silencieux si le navigateur bloque l'audio
-            }
+            } catch (e) {}
         }
 
         function playVictorySound() {
             try {
                 const ctx = getAudioCtx();
                 const t = ctx.currentTime;
-                // Trois notes montantes
                 [523, 659, 784].forEach((freq, i) => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
@@ -186,9 +181,7 @@
                     osc.start(t + i * 0.15);
                     osc.stop(t + i * 0.15 + 0.3);
                 });
-            } catch (e) {
-                // Silencieux si erreur
-            }
+            } catch (e) {}
         }
 
         image.onload = () => {
@@ -299,12 +292,11 @@
             const adjacent = getAdjacentIndices(emptyPos);
 
             if (adjacent.includes(clickedIndex)) {
-                // Mouvement valide
                 [tiles[emptyPos], tiles[clickedIndex]] = [tiles[clickedIndex], tiles[emptyPos]];
                 moves++;
                 updateMoves();
 
-                // 🔊 JOUER LE SON DE GLISSEMENT
+                // 🔊 Son de glissement
                 playSlideSound();
 
                 if (!gameStarted) {
@@ -340,7 +332,7 @@
             clearInterval(timerInterval);
             victoryDiv.style.display = 'block';
 
-            // 🎉 JOUER LE SON DE VICTOIRE
+            // 🎉 Son de victoire
             playVictorySound();
         }
 
